@@ -153,7 +153,7 @@
 const SYMBOLS = [
   { s: "OANDA:XAUUSD",      n: "Gold Spot / U.S. Dollar",     px: { gold: "XAU" } },
   { s: "IDX:BBCA",          n: "PT Bank Central Asia Tbk",    px: { td: "BBCA:IDX" }, tf: "D" },
-  { s: "TVC:GOLD",          n: "Gold",                        px: { gold: "XAU" } },
+  { s: "IDX:COMPOSITE",     n: "IDX Composite Index (IHSG)",  px: {}, tf: "D" },   // IDX data in widgets is daily-only
   { s: "COINBASE:ETHUSD",   n: "Ethereum / U.S. Dollar",      px: { binance: "ETHUSDT", coinbase: "ETH-USD" } },
   { s: "AMEX:SPY",          n: "SPDR S&P 500 ETF Trust",      px: { td: "SPY" } },
   { s: "COINBASE:BTCUSD",   n: "Bitcoin / U.S. Dollar",       px: { binance: "BTCUSDT", coinbase: "BTC-USD" } },
