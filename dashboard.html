@@ -39,16 +39,21 @@
   /* bottom half: watchlist */
   #grid { flex:1 1 0; min-height:0; display:grid; gap:4px; padding:4px; border-top:1px solid var(--line);
     grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(3, 1fr); --s:1; }
-  .tile { position:relative; min-height:0; overflow:hidden;
+  .tile { position:relative; min-height:0; overflow:hidden; display:flex; flex-direction:column;
     background:var(--panel); border:1px solid var(--line); border-radius:6px; }
+  .top { position:relative; flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
   .tile.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
   /* TradingView quote widget is fixed at 101px tall; render it wide and scale it down so nothing truncates */
-  .q { position:absolute; inset:0; overflow:hidden; }
+  /* only the top ~60% of the 101px quote widget has content — crop the empty rest */
+  .q { flex:0 0 auto; height:calc(101px * var(--s) * .6); overflow:hidden; }
+  .spark { flex:1 1 auto; min-height:0; }
+  .spark iframe { width:100%; height:100%; }
+  .top .hit { position:absolute; inset:0; z-index:3; cursor:pointer; }
+  .top .hit:hover { background:rgba(255,255,255,.03); }
   .q iframe { width:calc(100% / var(--s)); height:101px; transform:scale(var(--s)); transform-origin:0 0; }
-  .q .hit { position:absolute; inset:0; z-index:3; cursor:pointer; }
-  .q .hit:hover { background:rgba(255,255,255,.03); }
+
   /* average button: sits in the empty lower part of the quote widget */
-  .av { position:absolute; left:8px; right:8px; bottom:7px; z-index:4; cursor:pointer;
+  .av { flex:0 0 auto; margin:0 6px 6px; cursor:pointer;
     display:flex; align-items:center; justify-content:space-between; gap:6px;
     font-size:11px; font-variant-numeric:tabular-nums; padding:4px 8px; border-radius:6px; }
   .av.empty { justify-content:center; color:var(--muted); border:1px dashed #34343c; background:rgba(255,255,255,.015); }
@@ -91,6 +96,9 @@
   <select id="dwell" class="btn" title="Seconds per symbol">
     <option>5</option><option>10</option><option>15</option><option>20</option><option>30</option><option>60</option>
   </select>
+  <select id="range" class="btn" title="Sparkline range on the watchlist tiles">
+    <option value="1D">Spark 1D</option><option value="1M">Spark 1M</option><option value="3M">Spark 3M</option><option value="12M">Spark 1Y</option>
+  </select>
   <button id="state" class="btn" title="Space">Pause</button>
   <span id="winCtl" hidden>
     <select id="winMode" class="btn" title="Fill this screen: whole / top half / bottom half">
@@ -118,7 +126,7 @@
     <label>Your average
       <input id="mAvg" inputmode="decimal" placeholder="e.g. 75000" autocomplete="off">
     </label>
-    <div class="row"><span class="muted">Unrealized PnL</span><span id="mPct" class="big muted">—</span></div>
+    <div class="row"><span class="muted">Unrealised PnL</span><span id="mPct" class="big muted">—</span></div>
     <div id="keyRow">
       <label>Twelve Data API key <span class="muted">(free at twelvedata.com — needed for live price on this symbol)</span>
         <input id="mKey" placeholder="paste key" autocomplete="off">
@@ -216,23 +224,36 @@ function goTo(i){
 /* ================= watchlist tiles ================= */
 $("grid").replaceChildren(...SYMBOLS.map((x, i) => {
   const t = document.createElement("div"); t.className = "tile";
+  const top = document.createElement("div"); top.className = "top";
   const q = document.createElement("div"); q.className = "q";
   q.appendChild(frame(widgetUrl("single-quote", { symbol: x.s, width: "100%", colorTheme: "dark", isTransparent: true })));
+  const sp = document.createElement("div"); sp.className = "spark";
   const hit = document.createElement("div"); hit.className = "hit"; hit.title = "Show on chart"; hit.onclick = () => goTo(i);
-  q.appendChild(hit);
+  top.append(q, sp, hit);
   const av = document.createElement("div"); av.className = "av empty"; av.onclick = () => openModal(i);
-  t.append(q, av);
+  t.append(top, av);
   return t;
 }));
 
-// The quote widget is 101px tall but only its top ~60% has content. Render it ~300px wide (so names
-// don't truncate) and scale it to the tile, keeping the empty lower strip free for the average button.
+// Render the quote widget ~300px wide (so names don't truncate) and scale it to the tile width;
+// whatever height is left goes to the sparkline (min ~28px) and the average button (~32px).
 function fitTiles(){
   const t = $("grid").firstElementChild; if (!t) return;
-  const sc = Math.max(.5, Math.min(1.6, t.clientWidth / 300, (t.clientHeight - 34) / (101 * .62)));
+  const sc = Math.max(.5, Math.min(1.6, t.clientWidth / 300, (t.clientHeight - 32 - 28) / (101 * .6)));
   $("grid").style.setProperty("--s", sc.toFixed(3));
 }
 new ResizeObserver(fitTiles).observe($("grid"));
+
+let range = load("range", "1D");
+function buildSparks(){
+  [...$("grid").children].forEach((t, i) => t.querySelector(".spark").replaceChildren(frame(widgetUrl("mini-symbol-overview", {
+    symbol: SYMBOLS[i].s, width: "100%", height: "100%", autosize: true, dateRange: range,
+    colorTheme: "dark", isTransparent: true, chartOnly: true, noTimeScale: true, largeChartUrl: ""
+  }))));
+}
+buildSparks();
+$("range").value = range;
+$("range").onchange = e => { range = e.target.value; save("range", range); buildSparks(); };
 
 function render(){
   const x = SYMBOLS[idx];
@@ -312,7 +333,7 @@ function update(){
     el.className = "av set"; el.title = "Click to edit";
     el.innerHTML = `<span class="muted">Avg ${fmt(a)}</span>` + (p == null
       ? `<span class="muted">waiting for price…</span>`
-      : `<span class="pct ${p >= 0 ? "up" : "down"}">uPnL ${pctText(p)}</span>`);
+      : `<span class="pct ${p >= 0 ? "up" : "down"}">Unrealised PnL ${pctText(p)}</span>`);
   });
   $("feed").innerHTML = Object.entries(feed).map(([k,v]) =>
     `<span class="${v==="ok"?"up":v==="nokey"?"muted":"down"}">●</span> ${k}${v==="nokey"?" (no key)":""}`).join(" &nbsp;");

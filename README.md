@@ -10,10 +10,10 @@ It runs as a borderless Windows app (no browser bar), and snaps to fill whicheve
 
 - **Rotating chart.** It shows one symbol at a time and moves to the next every N seconds (default 10). The
   next chart loads in the background, so the switch is instant.
-- **Live watchlist grid.** All symbols appear at once with price and day change. Click a tile to show it on the
+- **Live watchlist grid.** All symbols appear at once with price, day change and a sparkline (1D/1M/3M/1Y). Click a tile to show it on the
   big chart.
-- **Averages and uPnL.** Click "+ Click to set your average" on any tile, type your average, and the
-  tile shows `Avg … uPnL +x.xx%`, updated live.
+- **Averages and unrealised PnL.** Click "+ Click to set your average" on any tile, type your average, and the
+  tile shows `Avg … Unrealised PnL +x.xx%`, updated live.
 - **Desktop window.** It's borderless and fills the monitor it's on: Full, Top ½ or Bottom ½. It remembers
   the monitor and mode you used last.
 - **Per-symbol timeframe.** For example, IDX stocks are locked to 1D, because that's all the free widgets provide.
@@ -60,14 +60,14 @@ Edit the `SYMBOLS` list near the top of the `<script>` in `dashboard.html`:
 | --- | --- |
 | `s` | TradingView symbol with its exchange prefix, exactly as TradingView's symbol search shows it |
 | `n` | Display name |
-| `px` | Where the live price for the uPnL % comes from (see below) |
+| `px` | Where the live price for the unrealised PnL % comes from (see below) |
 | `tf` | Optional fixed chart timeframe for this symbol (`"D"`, `"W"`, `"60"`, …) |
 
 If you use the exe, keep `dashboard.html` next to it. The app uses that copy, so you don't need to rebuild after editing.
 
-## Price sources for uPnL
+## Price sources for unrealised PnL
 
-The charts and tiles are TradingView widgets, which don't share their prices with the page. So the uPnL %
+The charts and tiles are TradingView widgets, which don't share their prices with the page. So the unrealised PnL %
 uses its own feeds:
 
 | Source (`px` key) | Covers | Key needed |
