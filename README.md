@@ -20,21 +20,27 @@ It runs as a borderless Windows app (no browser bar), and snaps to fill whicheve
 
 ## Quick start
 
-**Option A: prebuilt exe.** Download `PortfolioDashboard.exe` (and `dashboard.html`) from
-[Releases](../../releases), then run the exe.
-
-**Option B: from source** (Windows, Python 3.10+)
+**One click (Windows):**
 
 ```powershell
 git clone https://github.com/jonathantheja99/portofolio-dashboard
-cd portofolio-dashboard
-pip install -r requirements.txt
-pythonw dashboard.py        # or double-click run.bat
 ```
 
-**Build your own exe:** run `build.bat`. The result is `dist\PortfolioDashboard.exe`.
+Then double-click **`start-dashboard.bat`** in that folder. Each time it runs, it:
 
-You can also open `dashboard.html` directly in any browser. The desktop window just removes the browser UI.
+1. pulls the latest version from GitHub,
+2. builds `dist\PortfolioDashboard.exe` if needed (the first run, or when the app code changed),
+3. copies your `dashboard.html` and `config.local.js` next to the exe,
+4. creates a **Portfolio Dashboard** shortcut on your Desktop (first run only), then launches the app.
+
+After that, just use the Desktop shortcut. It updates and launches in one click.
+It needs [Python 3.10+](https://www.python.org/downloads/) on your PATH and, for auto-updates, [Git](https://git-scm.com/).
+
+**Other ways to run it**
+
+- Prebuilt exe: download `PortfolioDashboard.exe` and `dashboard.html` from [Releases](../../releases).
+- From source: `pip install -r requirements.txt`, then `pythonw dashboard.py`.
+- In a browser: open `dashboard.html` directly. The desktop window just removes the browser UI.
 
 ## Using it
 
@@ -46,7 +52,7 @@ You can also open `dashboard.html` directly in any browser. The desktop window j
 | Previous / next symbol | `←` / `→` |
 | Set or edit an average | Click the button at the bottom of a tile. `Enter` saves, `Esc` cancels, **Clear** removes it. |
 | Close / minimize | `×` / `–` in the header (or `Alt+F4`) |
-| Start with Windows | `Win+R` → `shell:startup` → put a shortcut to the exe (or `run.bat`) there |
+| Start with Windows | `Win+R` → `shell:startup` → copy the **Portfolio Dashboard** Desktop shortcut there |
 
 ## Your watchlist
 
