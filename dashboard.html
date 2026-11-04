@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Portfolio Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0b0b0d; --panel:#131317; --line:#26262c; --text:#d9d9de; --muted:#7c7c86;
+          --accent:#f23645; --up:#22ab94; --down:#f23645; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:13px/1.3 -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  body { display:flex; flex-direction:column; }
+  iframe { border:0; display:block; }
+  .up { color:var(--up); } .down { color:var(--down); } .muted { color:var(--muted); }
+
+  header { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:6px 10px; }
+  #title { font-size:18px; font-weight:600; }
+  #sub { color:var(--muted); font-size:12px; }
+  #feed { margin-left:auto; color:var(--muted); font-size:10px; white-space:nowrap; }
+  #count { color:var(--muted); font-variant-numeric:tabular-nums; }
+  .btn { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px;
+    padding:4px 9px; cursor:pointer; font:inherit; }
+  .btn:hover { border-color:#3a3a42; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  select.btn { padding:3px 6px; }
+  #winCtl:not([hidden]) { display:flex; gap:6px; }
+  #state.paused { color:var(--accent); border-color:var(--accent); }
+
+  #progress { flex:0 0 3px; background:var(--line); }
+  #bar { height:100%; width:0; background:var(--accent); }
+
+  /* top half: rotating chart */
+  #stage { flex:1 1 0; position:relative; min-height:180px; }
+  .slot { position:absolute; inset:0; visibility:hidden; }
+  .slot.active { visibility:visible; z-index:2; }
+  .slot iframe { width:100%; height:100%; }
+
+  /* bottom half: watchlist */
+  #grid { flex:1 1 0; min-height:0; display:grid; gap:4px; padding:4px; border-top:1px solid var(--line);
+    grid-template-columns:repeat(4, 1fr); grid-template-rows:repeat(3, 1fr); --s:1; }
+  .tile { position:relative; min-height:0; overflow:hidden;
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; }
+  .tile.on { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  /* TradingView quote widget is fixed at 101px tall; render it wide and scale it down so nothing truncates */
+  .q { position:absolute; inset:0; overflow:hidden; }
+  .q iframe { width:calc(100% / var(--s)); height:101px; transform:scale(var(--s)); transform-origin:0 0; }
+  .q .hit { position:absolute; inset:0; z-index:3; cursor:pointer; }
+  .q .hit:hover { background:rgba(255,255,255,.03); }
+  /* average button: sits in the empty lower part of the quote widget */
+  .av { position:absolute; left:8px; right:8px; bottom:7px; z-index:4; cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    font-size:11px; font-variant-numeric:tabular-nums; padding:4px 8px; border-radius:6px; }
+  .av.empty { justify-content:center; color:var(--muted); border:1px dashed #34343c; background:rgba(255,255,255,.015); }
+  .av.empty:hover { color:var(--text); border-color:#55555f; background:rgba(255,255,255,.04); }
+  .av.set { background:#18181e; border:1px solid #2a2a31; }
+  .av.set:hover { border-color:#44444d; }
+  .av .pct { font-weight:700; font-size:12px; }
+
+  /* modal */
+  #modal { position:fixed; inset:0; z-index:50; display:none; place-items:center; background:rgba(0,0,0,.6); }
+  #modal.open { display:grid; }
+  .box { width:min(340px, 92vw); background:#15151a; border:1px solid #33333b; border-radius:10px; padding:16px; box-shadow:0 20px 60px rgba(0,0,0,.6); }
+  .box h3 { margin:0; font-size:17px; }
+  .box .full { color:var(--muted); font-size:12px; margin:2px 0 12px; }
+  .box .row { display:flex; justify-content:space-between; align-items:baseline; margin:6px 0; font-variant-numeric:tabular-nums; }
+  .box label { color:var(--muted); font-size:12px; }
+  .box input { width:100%; margin-top:4px; background:var(--panel); color:var(--text); border:1px solid #3a3a42;
+    border-radius:6px; padding:8px 10px; font:15px inherit; font-variant-numeric:tabular-nums; }
+  .box input:focus { outline:none; border-color:#5a5a66; }
+  .box .big { font-size:22px; font-weight:700; }
+  .box .actions { display:flex; gap:8px; margin-top:14px; }
+  .box .actions .btn { flex:1; padding:7px; }
+  #keyRow { margin-top:10px; display:none; }
+  #keyRow.show { display:block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="pywebview-drag-region" style="cursor:move">
+    <div id="title">—</div>
+    <div id="sub">—</div>
+  </div>
+  <span id="feed"></span>
+  <span id="count" class="pywebview-drag-region"></span>
+  <select id="interval" class="btn" title="Chart timeframe">
+    <option value="1">1m</option><option value="5">5m</option><option value="15">15m</option>
+    <option value="60">1H</option><option value="240">4H</option><option value="D">1D</option><option value="W">1W</option>
+  </select>
+  <select id="dwell" class="btn" title="Seconds per symbol">
+    <option>5</option><option>10</option><option>15</option><option>20</option><option>30</option><option>60</option>
+  </select>
+  <button id="state" class="btn" title="Space">Pause</button>
+  <span id="winCtl" hidden>
+    <select id="winMode" class="btn" title="Fill this screen: whole / top half / bottom half">
+      <option value="full">Full</option><option value="top">Top ½</option><option value="bottom">Bottom ½</option>
+    </select>
+    <button id="minWin" class="btn" title="Minimize">–</button>
+    <button id="closeWin" class="btn" title="Close">×</button>
+  </span>
+</header>
+
+<div id="progress"><div id="bar"></div></div>
+
+<div id="stage">
+  <div class="slot active" id="slotA"></div>
+  <div class="slot" id="slotB"></div>
+</div>
+
+<div id="grid"></div>
+
+<div id="modal">
+  <div class="box">
+    <h3 id="mSym">—</h3>
+    <div class="full" id="mName">—</div>
+    <div class="row"><span class="muted">Last price</span><span id="mLast">—</span></div>
+    <label>Your average
+      <input id="mAvg" inputmode="decimal" placeholder="e.g. 75000" autocomplete="off">
+    </label>
+    <div class="row"><span class="muted">Unrealized PnL</span><span id="mPct" class="big muted">—</span></div>
+    <div id="keyRow">
+      <label>Twelve Data API key <span class="muted">(free at twelvedata.com — needed for live price on this symbol)</span>
+        <input id="mKey" placeholder="paste key" autocomplete="off">
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="mClear">Clear</button>
+      <button class="btn" id="mCancel">Cancel</button>
+      <button class="btn primary" id="mSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== EDIT YOUR LIST HERE =====
+   s:  full EXCHANGE:SYMBOL from TradingView's symbol search (charts + tiles)
+   n:  full name shown on the tile
+   px: live price source for the "vs avg" %:
+       binance / coinbase / hl (Hyperliquid) / gold : free, no key
+       td (Twelve Data)                             : free key, entered in the pop-up
+   tf: optional fixed chart timeframe for that symbol */
+const SYMBOLS = [
+  { s: "OANDA:XAUUSD",      n: "Gold Spot / U.S. Dollar",     px: { gold: "XAU" } },
+  { s: "IDX:BBCA",          n: "PT Bank Central Asia Tbk",    px: { td: "BBCA:IDX" }, tf: "D" },
+  { s: "TVC:GOLD",          n: "Gold",                        px: { gold: "XAU" } },
+  { s: "COINBASE:ETHUSD",   n: "Ethereum / U.S. Dollar",      px: { binance: "ETHUSDT", coinbase: "ETH-USD" } },
+  { s: "AMEX:SPY",          n: "SPDR S&P 500 ETF Trust",      px: { td: "SPY" } },
+  { s: "COINBASE:BTCUSD",   n: "Bitcoin / U.S. Dollar",       px: { binance: "BTCUSDT", coinbase: "BTC-USD" } },
+  { s: "FX_IDC:USDIDR",     n: "U.S. Dollar / Rupiah",        px: { td: "USD/IDR" } },
+  { s: "BINANCE:MANTAUSDT", n: "MANTA / TetherUS",            px: { binance: "MANTAUSDT" } },
+  { s: "BYBIT:HYPEUSDT",    n: "Hyperliquid",                 px: { hl: "HYPE" } },
+  { s: "AMEX:VOO",          n: "Vanguard S&P 500 ETF",        px: { td: "VOO" } },
+  { s: "AMEX:FXI",          n: "iShares China Large-Cap ETF", px: { td: "FXI" } },
+  { s: "AMEX:GDX",          n: "VanEck Gold Miners ETF",      px: { td: "GDX" } },
+];
+const DEFAULTS = { dwell: 10, interval: "60" };
+/* =============================== */
+
+const HOST = "https://www.tradingview-widget.com/embed-widget/";
+const PAGE = location.host || "localhost";
+const tick = s => s.split(":")[1];
+const $ = id => document.getElementById(id);
+
+function widgetUrl(name, cfg){
+  return HOST + name + "/?locale=en#" + encodeURIComponent(JSON.stringify({ ...cfg, "page-uri": PAGE }));
+}
+function frame(src){ const f = document.createElement("iframe"); f.src = src; f.setAttribute("allowtransparency","true"); return f; }
+function load(k, fb){ try { const v = localStorage.getItem("rot_"+k); return v == null ? fb : v; } catch(e){ return fb; } }
+function save(k,v){ try { localStorage.setItem("rot_"+k, v); } catch(e){} }
+
+const qs = new URLSearchParams(location.search);
+let dwell    = +(qs.get("t") || load("dwell", DEFAULTS.dwell));
+let interval =   qs.get("i") || load("tf", DEFAULTS.interval);
+
+const slots = [$("slotA"), $("slotB")];
+let active = 0, idx = 0, elapsed = 0, paused = false, hoverPause = false, modalOpen = false;
+
+/* ================= averages (keyed by symbol, saved locally) ================= */
+let avg = {};
+try { avg = JSON.parse(load("avgmap", "{}")); } catch(e){}
+try { // carry over averages entered in the previous version
+  const old = JSON.parse(load("avgs", "[]"));
+  old.forEach(a => { if (SYMBOLS[a.i] && +a.avg && !avg[SYMBOLS[a.i].s]) avg[SYMBOLS[a.i].s] = +a.avg; });
+  if (old.length) { save("avgs", "[]"); save("avgmap", JSON.stringify(avg)); }
+} catch(e){}
+const saveAvg = () => save("avgmap", JSON.stringify(avg));
+
+/* ================= big chart (double-buffered) ================= */
+const tfOf = i => SYMBOLS[i].tf || interval;
+function loadInto(slot, i){
+  slot.dataset.idx = i; slot.dataset.interval = tfOf(i);
+  slot.replaceChildren(frame(widgetUrl("advanced-chart", {
+    autosize: true, width: "100%", height: "100%",
+    symbol: SYMBOLS[i].s, interval: tfOf(i), timezone: "Asia/Jakarta",
+    theme: "dark", style: "1", backgroundColor: "#0b0b0d", gridColor: "rgba(255,255,255,0.04)",
+    hide_side_toolbar: true, allow_symbol_change: false, save_image: false,
+    withdateranges: true, calendar: false, support_host: "https://www.tradingview.com"
+  })));
+}
+const ready = (slot, i) => slot.dataset.idx == i && slot.dataset.interval == tfOf(i);
+
+function goTo(i){
+  const n = SYMBOLS.length;
+  idx = ((i % n) + n) % n;
+  const hidden = slots[1-active];
+  if (!ready(hidden, idx)) loadInto(hidden, idx);
+  hidden.classList.add("active");
+  slots[active].classList.remove("active");
+  active = 1 - active;
+  loadInto(slots[1-active], (idx+1) % n);
+  elapsed = 0;
+  render();
+}
+
+/* ================= watchlist tiles ================= */
+$("grid").replaceChildren(...SYMBOLS.map((x, i) => {
+  const t = document.createElement("div"); t.className = "tile";
+  const q = document.createElement("div"); q.className = "q";
+  q.appendChild(frame(widgetUrl("single-quote", { symbol: x.s, width: "100%", colorTheme: "dark", isTransparent: true })));
+  const hit = document.createElement("div"); hit.className = "hit"; hit.title = "Show on chart"; hit.onclick = () => goTo(i);
+  q.appendChild(hit);
+  const av = document.createElement("div"); av.className = "av empty"; av.onclick = () => openModal(i);
+  t.append(q, av);
+  return t;
+}));
+
+// The quote widget is 101px tall but only its top ~60% has content. Render it ~300px wide (so names
+// don't truncate) and scale it to the tile, keeping the empty lower strip free for the average button.
+function fitTiles(){
+  const t = $("grid").firstElementChild; if (!t) return;
+  const sc = Math.max(.5, Math.min(1.6, t.clientWidth / 300, (t.clientHeight - 34) / (101 * .62)));
+  $("grid").style.setProperty("--s", sc.toFixed(3));
+}
+new ResizeObserver(fitTiles).observe($("grid"));
+
+function render(){
+  const x = SYMBOLS[idx];
+  $("title").textContent = tick(x.s);
+  $("sub").textContent = x.n + " · " + x.s.split(":")[0] + (x.tf ? " · always " + ({D:"1D",W:"1W"}[x.tf] || x.tf) : "");
+  $("count").textContent = (idx+1) + " / " + SYMBOLS.length;
+  [...$("grid").children].forEach((c,i) => c.classList.toggle("on", i === idx));
+  $("state").textContent = paused ? "Paused" : "Pause";
+  $("state").classList.toggle("paused", paused);
+}
+
+/* ================= live prices ================= */
+const prices = {};      // symbol index -> number
+const feed = {};        // source -> "ok" | "err" | "nokey"
+
+async function getJSON(url, opt = {}){
+  const c = new AbortController(); const t = setTimeout(() => c.abort(), 8000);
+  try { const r = await fetch(url, { ...opt, signal: c.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const keysFor = (src, only) => [...new Set(SYMBOLS.map((x,i) => (!only || only.has(i)) && x.px && x.px[src]).filter(Boolean))];
+function apply(src, map){ SYMBOLS.forEach((x,i) => { const k = x.px && x.px[src]; if (k && map[k] != null && isFinite(map[k])) prices[i] = +map[k]; }); }
+
+async function binance(){
+  const ks = keysFor("binance"); if (!ks.length) return;
+  const q = "/api/v3/ticker/price?symbols=" + encodeURIComponent(JSON.stringify(ks));
+  for (const host of ["https://api.binance.com", "https://data-api.binance.vision"]) {
+    try { const j = await getJSON(host + q); apply("binance", Object.fromEntries(j.map(o => [o.symbol, o.price]))); feed.Binance = "ok"; delete feed.Coinbase; return; }
+    catch(e){}
+  }
+  feed.Binance = "err";
+  try { for (const k of keysFor("coinbase")) { const j = await getJSON(`https://api.coinbase.com/v2/prices/${k}/spot`); apply("coinbase", { [k]: j.data.amount }); } feed.Coinbase = "ok"; }
+  catch(e){ feed.Coinbase = "err"; }
+}
+async function hyperliquid(){
+  if (!keysFor("hl").length) return;
+  try { apply("hl", await getJSON("https://api.hyperliquid.xyz/info", { method:"POST",
+      headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ type:"allMids" }) })); feed.Hyperliquid = "ok"; }
+  catch(e){ feed.Hyperliquid = "err"; }
+}
+async function gold(){
+  for (const g of keysFor("gold")) try { apply("gold", { [g]: (await getJSON("https://api.gold-api.com/price/" + g)).price }); feed.Gold = "ok"; }
+  catch(e){ feed.Gold = "err"; }
+}
+async function pullFast(){ await Promise.allSettled([binance(), hyperliquid(), gold()]); update(); }
+
+// Twelve Data free tier = 800 credits/day, 1 credit per symbol → only symbols you've set an average on.
+const heldIdx = () => new Set(SYMBOLS.map((x,i) => avg[x.s] ? i : -1).filter(i => i >= 0));
+let tdTimer;
+async function pullTD(){
+  clearTimeout(tdTimer);
+  const list = keysFor("td", heldIdx());
+  tdTimer = setTimeout(pullTD, Math.max(60, Math.ceil(Math.max(1, list.length) * 86400 / 750)) * 1000);
+  if (!list.length) { delete feed["Twelve Data"]; return update(); }
+  const key = load("tdkey", "");
+  if (!key) { feed["Twelve Data"] = "nokey"; return update(); }
+  try {
+    const j = await getJSON("https://api.twelvedata.com/price?symbol=" + encodeURIComponent(list.join(",")) + "&apikey=" + encodeURIComponent(key));
+    const map = {};
+    if (list.length === 1) { if (j.price) map[list[0]] = j.price; } else for (const k of list) if (j[k] && j[k].price) map[k] = j[k].price;
+    apply("td", map); feed["Twelve Data"] = j.status === "error" ? "err" : "ok";
+  } catch(e){ feed["Twelve Data"] = "err"; }
+  update();
+}
+
+/* ================= vs-average display ================= */
+function fmt(n){ const a = Math.abs(n), d = a >= 100 ? 2 : a >= 1 ? 3 : 5;
+  return n.toLocaleString("en-US", { maximumFractionDigits: d }); }
+const pctText = p => (p >= 0 ? "+" : "") + p.toFixed(2) + "%";
+const pctOf = (i, a) => (prices[i] != null && +a) ? (prices[i] - a) / a * 100 : null;
+
+function update(){
+  [...$("grid").children].forEach((t, i) => {
+    const a = avg[SYMBOLS[i].s], el = t.querySelector(".av");
+    if (!a) { el.className = "av empty"; el.title = ""; el.textContent = "+ Click to set your average"; return; }
+    const p = pctOf(i, a);
+    el.className = "av set"; el.title = "Click to edit";
+    el.innerHTML = `<span class="muted">Avg ${fmt(a)}</span>` + (p == null
+      ? `<span class="muted">waiting for price…</span>`
+      : `<span class="pct ${p >= 0 ? "up" : "down"}">uPnL ${pctText(p)}</span>`);
+  });
+  $("feed").innerHTML = Object.entries(feed).map(([k,v]) =>
+    `<span class="${v==="ok"?"up":v==="nokey"?"muted":"down"}">●</span> ${k}${v==="nokey"?" (no key)":""}`).join(" &nbsp;");
+  if (modalOpen) modalPreview();
+}
+
+/* ================= modal ================= */
+let mIdx = -1;
+function openModal(i){
+  mIdx = i; modalOpen = true;
+  const x = SYMBOLS[i];
+  $("mSym").textContent = tick(x.s);
+  $("mName").textContent = x.n + " · " + x.s.split(":")[0];
+  $("mAvg").value = avg[x.s] ?? "";
+  const needsKey = !!(x.px && x.px.td) && !load("tdkey", "");
+  $("keyRow").classList.toggle("show", needsKey); $("mKey").value = "";
+  $("modal").classList.add("open");
+  modalPreview();
+  setTimeout(() => { $("mAvg").focus(); $("mAvg").select(); }, 0);
+}
+function closeModal(){ $("modal").classList.remove("open"); modalOpen = false; mIdx = -1; }
+function modalPreview(){
+  if (mIdx < 0) return;
+  const last = prices[mIdx], a = +$("mAvg").value.replace(/,/g, "");
+  $("mLast").textContent = last != null ? fmt(last) : "no live price yet";
+  const p = pctOf(mIdx, a), el = $("mPct");
+  el.textContent = p == null ? "—" : pctText(p);
+  el.className = "big " + (p == null ? "muted" : p >= 0 ? "up" : "down");
+}
+function saveModal(){
+  const x = SYMBOLS[mIdx], a = +$("mAvg").value.replace(/,/g, "");
+  if (a > 0) avg[x.s] = a; else delete avg[x.s];
+  const k = $("mKey").value.trim(); if (k) save("tdkey", k);
+  saveAvg(); closeModal(); update();
+  if (x.px && x.px.td) setTimeout(pullTD, 300);
+}
+$("mAvg").addEventListener("input", modalPreview);
+$("mSave").onclick = saveModal;
+$("mCancel").onclick = closeModal;
+$("mClear").onclick = () => { $("mAvg").value = ""; saveModal(); };
+$("modal").addEventListener("mousedown", e => { if (e.target.id === "modal") closeModal(); });
+$("modal").addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); saveModal(); }
+  if (e.key === "Escape") closeModal();
+});
+
+/* ================= timer & controls ================= */
+setInterval(() => {
+  if (paused || hoverPause || modalOpen) return;
+  elapsed += 100;
+  $("bar").style.width = Math.min(100, elapsed / (dwell*1000) * 100) + "%";
+  if (elapsed >= dwell*1000) goTo(idx+1);
+}, 100);
+
+$("state").onclick = () => { paused = !paused; render(); };
+$("stage").addEventListener("mouseenter", () => hoverPause = true);
+$("stage").addEventListener("mouseleave", () => hoverPause = false);
+document.addEventListener("keydown", e => {
+  if (modalOpen || ["SELECT","INPUT"].includes(e.target.tagName)) return;
+  if (e.code === "Space") { e.preventDefault(); paused = !paused; render(); }
+  if (e.key === "ArrowRight") goTo(idx+1);
+  if (e.key === "ArrowLeft")  goTo(idx-1);
+});
+$("dwell").value = String(dwell);
+$("dwell").onchange = e => { dwell = +e.target.value; save("dwell", dwell); elapsed = 0; };
+$("interval").value = interval;
+$("interval").onchange = e => { interval = e.target.value; save("tf", interval);
+  loadInto(slots[active], idx); loadInto(slots[1-active], (idx+1) % SYMBOLS.length); };
+
+/* ================= desktop window (dashboard.py) ================= */
+window.addEventListener("pywebviewready", async () => {
+  const api = window.pywebview.api;
+  $("winCtl").hidden = false;
+  $("closeWin").onclick = () => api.close();
+  $("minWin").onclick = () => api.minimize();
+  try { $("winMode").value = await api.get_mode(); } catch(e){}
+  $("winMode").onchange = e => api.set_mode(e.target.value);
+});
+
+/* ================= boot ================= */
+loadInto(slots[active], 0);
+loadInto(slots[1-active], 1);
+render(); update();
+pullFast(); setInterval(pullFast, 10000);
+pullTD();
+</script>
+</body>
+</html>
