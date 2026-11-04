@@ -75,12 +75,12 @@ uses its own feeds:
 | `binance` (falls back to `data-api.binance.vision`, then `coinbase`) | Crypto | No |
 | `hl` (Hyperliquid) | HYPE and other Hyperliquid coins | No |
 | `gold` (gold-api.com) | XAU | No |
-| `td` (Twelve Data) | US stocks/ETFs, FX (USD/IDR), IDX stocks (plan-dependent) | Free key: the pop-up asks for it the first time |
+| `td` (Twelve Data) | US stocks/ETFs, FX (USD/IDR), IDX stocks (plan-dependent) | Free key: copy `config.example.js` to `config.local.js` and paste it there, or enter it in the pop-up |
 
 The Twelve Data free tier allows 800 credits a day. The app only requests symbols you've set an average on, and
 slows its refresh rate to stay under that limit.
 
-Your averages, API key and settings are stored locally only: in the app's profile under
+`config.local.js` is git-ignored, so your key never ends up in the repo. Your averages, API key and settings are stored locally only: in the app's profile under
 `%APPDATA%\PortfolioDashboard`, or in your browser's localStorage. Nothing is sent anywhere except the price
 requests above.
 

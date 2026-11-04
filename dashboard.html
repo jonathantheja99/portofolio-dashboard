@@ -140,6 +140,8 @@
   </div>
 </div>
 
+<!-- Optional local settings (API key). Not committed — see config.example.js -->
+<script src="config.local.js"></script>
 <script>
 /* ===== EDIT YOUR LIST HERE =====
    s:  full EXCHANGE:SYMBOL from TradingView's symbol search (charts + tiles)
@@ -165,6 +167,7 @@ const SYMBOLS = [
 const DEFAULTS = { dwell: 10, interval: "60" };
 /* =============================== */
 
+const LOCAL = window.DASHBOARD_CONFIG || {};
 const HOST = "https://www.tradingview-widget.com/embed-widget/";
 const PAGE = location.host || "localhost";
 const tick = s => s.split(":")[1];
@@ -176,6 +179,8 @@ function widgetUrl(name, cfg){
 function frame(src){ const f = document.createElement("iframe"); f.src = src; f.setAttribute("allowtransparency","true"); return f; }
 function load(k, fb){ try { const v = localStorage.getItem("rot_"+k); return v == null ? fb : v; } catch(e){ return fb; } }
 function save(k,v){ try { localStorage.setItem("rot_"+k, v); } catch(e){} }
+// Key typed in the pop-up wins; otherwise use the one from config.local.js
+const tdKey = () => load("tdkey", "") || LOCAL.twelveDataKey || "";
 
 const qs = new URLSearchParams(location.search);
 let dwell    = +(qs.get("t") || load("dwell", DEFAULTS.dwell));
@@ -308,7 +313,7 @@ async function pullTD(){
   const list = keysFor("td", heldIdx());
   tdTimer = setTimeout(pullTD, Math.max(60, Math.ceil(Math.max(1, list.length) * 86400 / 750)) * 1000);
   if (!list.length) { delete feed["Twelve Data"]; return update(); }
-  const key = load("tdkey", "");
+  const key = tdKey();
   if (!key) { feed["Twelve Data"] = "nokey"; return update(); }
   try {
     const j = await getJSON("https://api.twelvedata.com/price?symbol=" + encodeURIComponent(list.join(",")) + "&apikey=" + encodeURIComponent(key));
@@ -348,7 +353,7 @@ function openModal(i){
   $("mSym").textContent = tick(x.s);
   $("mName").textContent = x.n + " · " + x.s.split(":")[0];
   $("mAvg").value = avg[x.s] ?? "";
-  const needsKey = !!(x.px && x.px.td) && !load("tdkey", "");
+  const needsKey = !!(x.px && x.px.td) && !tdKey();
   $("keyRow").classList.toggle("show", needsKey); $("mKey").value = "";
   $("modal").classList.add("open");
   modalPreview();
